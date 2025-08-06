@@ -3,7 +3,7 @@
 from flwr.common import Context, ndarrays_to_parameters
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
 from flwr.server.strategy import FedAvg
-from federated_learning.task import Net, get_weights
+from federated_learning.task import MLP, get_weights, load_data
 
 
 def server_fn(context: Context):
@@ -11,8 +11,13 @@ def server_fn(context: Context):
     num_rounds = context.run_config["num-server-rounds"]
     fraction_fit = context.run_config["fraction-fit"]
 
+    # Lade Daten, um die Input-Dimension zu bestimmen
+    data_path = "/Users/ginasixt/federated-learning/diabetes_binary_health_indicators_BRFSS2015.csv"
+    client_loaders, _ = load_data(data_path=data_path, num_clients=1)
+    input_dim = client_loaders[0].dataset[0][0].shape[0]
+
     # Initialize model parameters
-    ndarrays = get_weights(Net())
+    ndarrays = get_weights(MLP(input_dim=input_dim))
     parameters = ndarrays_to_parameters(ndarrays)
 
     # Define strategy
