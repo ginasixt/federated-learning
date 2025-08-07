@@ -12,7 +12,7 @@ from torchvision.transforms import Compose, Normalize, ToTensor
 import pandas as pd
 from torch.utils.data import TensorDataset, DataLoader, random_split, Subset
 from collections import OrderedDict
-
+import random
 
 
 class MLP(nn.Module):
@@ -42,18 +42,18 @@ class MLP(nn.Module):
 
 
 
-fds = None  # Cache FederatedDataset
-
 
 def load_data(
     data_path: str,
     batch_size: int = 32,
     num_clients: int = 10,
+    #partition_id: int = 0,
     test_split: float = 0.2,
 ):
     """
     Lädt den Diabetes CSV-Datensatz, trennt Features und Label, erstellt TensorDatasets,
     splittet in Train/Test und partitioniert das Training auf mehrere Clients.
+    Es gibt nur die gewünschte Partition und das Test-Set zurück.
 
     Args:
         data_path: Pfad zur CSV-Datei mit dem Diabetes-Datensatz.
@@ -61,10 +61,19 @@ def load_data(
         num_clients: Anzahl der Clients für Federated Learning.
         test_split: Anteil an Daten, der als Test-Set verwendet wird (zwischen 0 und 1).
 
+        Not implemnted anymore: partition_id: Index der gewünschten Client-Partition (0-basiert).
+        TODO(ginasixt): Implementere dass das Dataset nur einmal geladen wird und man dann mit partition_id die Partition auswählt kp durch speichern oder so.
+
     Returns:
-        client_loaders: Liste von DataLoader-Objekten für jeden Client.
+        train_loaders: Liste von DataLoader-Objekten für jeden Client.
         test_loader: DataLoader für das gemeinsame Test-Set.
     """
+    # Setze den Zufalls-Seed für Reproduzierbarkeit damit alle Clients die gleiche Partition bekommen, wenn sie load_data aufrufen 
+    # keine saubere Lösung aber erstmal ok :P
+    seed = 42
+    torch.manual_seed(seed)
+    random.seed(seed)
+
     # 1. CSV laden
     df = pd.read_csv(data_path)
 
@@ -85,7 +94,23 @@ def load_data(
     total_size = len(full_dataset)
     test_size = int(total_size * test_split)
     train_size = total_size - test_size
-    train_dataset, test_dataset = random_split(full_dataset, [train_size, test_size])
+    train_dataset, test_dataset = random_split(
+        full_dataset, [train_size, test_size], generator=torch.Generator().manual_seed(seed)
+    )
+
+    # Maybe usage for later
+    # base_size = train_size // num_clients
+    # start = partition_id * base_size
+    # end = start + base_size if partition_id < num_clients - 1 else train_size
+    # indices = list(range(start, end))
+    # subset = Subset(train_dataset, indices)
+    # train_loader = DataLoader(subset, batch_size=batch_size, shuffle=True)
+    # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    # return train_loader, test_loader
+
+    # Benutzen wir später nochmal wenn wir die Partitionierung zb sauber speichern wollen.
+    #TODO(ginasixt): Implementere dass das Dataset nur einmal geladen wird und man dann mit partition_id die Partition auswählt kp durch speichern oder so.
 
     # 6. Partitionierung für Clients
     # Gleich große Partitionen, letzter Client bekommt Rest
@@ -99,14 +124,14 @@ def load_data(
         loader = DataLoader(subset, batch_size=batch_size, shuffle=True)
         client_loaders.append(loader)
 
-    # 7. Test-Loader
+    # 7. Test-Loader und Testset speichern
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return client_loaders, test_loader
 
 
+# Trains the model, like we did it in our previous MLP Project for more explanation look there.
 def train(net, trainloader, epochs, device):
-    """Trainiere das Modell auf dem tabellarischen Trainingsset."""
     net.to(device)
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
@@ -127,8 +152,8 @@ def train(net, trainloader, epochs, device):
     return avg_train_loss
 
 
+# Evaluates the model on the test data, like we did it in our previous MLP Project for more explanation look there.
 def test(net, testloader, device):
-    """Validiere das Modell auf dem tabellarischen Testset."""
     net.to(device)
     criterion = nn.CrossEntropyLoss()
     net.eval()
@@ -148,14 +173,12 @@ def test(net, testloader, device):
     return avg_loss, accuracy
 
 
-
+# get the model weights as numpy arrays
 def get_weights(net):
-    """Hole die aktuellen Modell-Gewichte als Liste von NumPy-Arrays."""
     return [val.cpu().numpy() for _, val in net.state_dict().items()]
 
-
+# set the model weights from the numpy arrays
 def set_weights(net, parameters):
-    """Setze die Modell-Gewichte aus einer Liste von NumPy-Arrays."""
     params_dict = zip(net.state_dict().keys(), parameters)
     state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
     net.load_state_dict(state_dict, strict=True)
