@@ -1,7 +1,6 @@
 # Diabetes Prediction with Federated Learning using Flower & PyTorch
-
-This project implements a Multilayer Perceptron (MLP) using PyTorch to predict the likelihood of diabetes based on health indicators.  
-The model is trained on the [Diabetes Health Indicators Dataset](https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset). dataset and demonstrates a federated learning setup using [Flower](https://flower.ai/). 
+This project uses a Multilayer Perceptron (MLP) built with PyTorch to predict diabetes based on health indicators in a federated learning setting. 
+The model is trained on the [Diabetes Health Indicators Dataset](https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset) dataset and orchestrated using [Flower](https://flower.ai/).
 
 By splitting the dataset across clients, we simulate a real-world federated learning scenario where data remains decentralized.\
 Each client:
