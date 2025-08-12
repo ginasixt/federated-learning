@@ -60,21 +60,21 @@ Federated Learning (FL) is a machine learning approach where a central model is 
 Here’s how a typical FL round works:
 
 ### Federated Flow Overview
+I use the Flower App API (ServerApp/ClientApp), so there is no start_server()/start_simulation() call. \
+flwr run-CLI loads the app objects and calls the functions (server_fn, client_fn). \
 
-1) Start a Round
-The server initiates a training round.
-2) Select Clients
-The server selects a random subset of clients (e.g., 10 out of 100) for the round.
-3) Send Global Model
-The server sends the current global model to each selected client.
-4) Local Training Begins
-Each client runs fit() on their local data (usually 1–5 epochs of training).
-5) Send Updates to Server
-Each client sends the updated model parameters back to the server.
-6) Server Aggregates Updates
-The server uses an aggregation algorithm like FedAvg to combine client updates into a new global model.
-7) Repeat Until Converged
-This process continues over multiple rounds until the model is satisfactory.
+Translated with DeepL.com (free version)
+
+1) Start of round (server) \
+Strategy (in our case FedAvg) decides which subset of clients will train in this round.
+3) Send Global Model \
+Passes the parameter to the selected Clients
+4) Local Training Begins \
+fit(...) loads the parameters (set_weights), trains (train(...), e.g., 1–5 epochs), and returns only weights/metrics.
+5) Aggregation \
+Strategy aggregate_fit(...) performs FedAvg (weighted average).
+6) Repeat Until Converged \
+This process continues over multiple rounds .
 
 Flower handles all communication, orchestration, and aggregation. \
 It provides:
