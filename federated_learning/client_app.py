@@ -31,7 +31,10 @@ def train_one_epoch(model, loader, opt, crit):
     model.train()
     for xb, yb in loader:
         xb, yb = xb.to(DEVICE), yb.to(DEVICE)
-        opt.zero_grad(); loss = crit(model(xb), yb); loss.backward(); opt.step()
+        opt.zero_grad(); 
+        loss = crit(model(xb), yb); 
+        loss.backward(); 
+        opt.step()
 
 def evaluate(model, loader, crit):
     model.eval(); n=0; correct=0; loss_sum=0.0
@@ -96,7 +99,7 @@ class FlowerClient(NumPyClient):
 
         # Modell wird initialisiert und auf Device (CPU/GPU) geladen
         self.model = MLP(in_dim=X.shape[1]).to(DEVICE)
-        # Klassen-Gewichte berechnen
+        # Klassen-Gewichte berechnen TODO(ginasixt): recall FN sehr schlecht, daher Gewichte anpassen
         class_counts = np.bincount(y)
         weights = 1.0 / class_counts
         weights = weights / weights.sum()
@@ -118,7 +121,7 @@ class FlowerClient(NumPyClient):
         # Sets the model weights and trains the model on the local data
         self.set_parameters(parameters)
 
-        opt = optim.SGD(self.model.parameters(), lr=0.05, momentum=0.9)
+        opt = optim.SGD(self.model.parameters(), config.get("lr", 1e-2), momentum=0.9)
         for _ in range(int(config.get("local_epochs", self.local_epochs))):
             train_one_epoch(self.model, self.train_loader, opt, self.crit)
         

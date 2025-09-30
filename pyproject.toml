@@ -39,10 +39,10 @@ clientapp = "federated_learning.client_app:app"
 [tool.flwr.app.config]
 # Server
 num-server-rounds = 5
-fraction-fit = 0.2
+fraction-fit = 0.5
 fraction-evaluate = 1.0
-min-fit-clients = 2
-min-evaluate-clients = 2
+min-fit-clients = 5
+min-evaluate-clients = 10
 local-epochs = 1
 
 # Datenpfade
@@ -53,6 +53,7 @@ split-path = "splits_dirichlet_10.json"
 
 # Client
 batch-size = 128
+lr = 1e-2
 
 
 # Default federation to use when running the app

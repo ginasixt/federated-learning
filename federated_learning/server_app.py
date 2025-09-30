@@ -23,8 +23,8 @@ def server_fn(context: Context):
 
     def on_fit_config_fn(rnd: int):
         return {
-            "epochs": 1 if rnd < 3 else 2,
-            "lr": 1e-2 if rnd < 5 else 5e-3,
+            "epochs": 1,
+            "lr": 1e-2 if rnd < 3 else 5e-3,
             "batch-size": int(rc.get("batch-size", 128)),
         }
 
@@ -57,9 +57,9 @@ def server_fn(context: Context):
         }
 
     strategy = FedAvg(
-        fraction_fit=float(rc.get("fraction-fit", 0.2)),
+        fraction_fit=float(rc.get("fraction-fit", 0.5)),
         fraction_evaluate=float(rc.get("fraction-evaluate", 1.0)),
-        min_fit_clients=int(rc.get("min-fit-clients", 2)),
+        min_fit_clients=int(rc.get("min-fit-clients", 5)),
         min_evaluate_clients=int(rc.get("min-evaluate-clients", 2)),
         on_fit_config_fn=on_fit_config_fn,
         evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation_fn,
