@@ -1,9 +1,10 @@
 # federated_learning/server_app.py
+from __future__ import annotations
+
 from flwr.server import ServerApp, ServerConfig
 from flwr.server.strategy import FedAvg
 from flwr.common import Context
 
-# WICHTIG: ServerAppComponents importieren (neue API)
 try:
     # je nach Version liegt es hier:
     from flwr.server.app import ServerAppComponents
@@ -18,55 +19,108 @@ except ImportError:
 # bauen FedAvg(..., on_fit_config_fn=..., evaluate_metrics_aggregation_fn=...).
 # udn geben ServerAppComponents(config, strategy) zurück.
 # Ab dann orchestriert Flower die Runden (Sampling, Fit, Evaluate).
-def server_fn(context: Context):
-    rc = context.run_config
+def server_fn(context: Context) -> ServerAppComponents:
+    """Build strategy + config. FedAvg + stabilere Settings + robuste Metrik-Aggregation."""
+    rc = dict(context.run_config)
 
-    def on_fit_config_fn(rnd: int):
+    # --- Pro-Runden-Konfiguration für Clients ---
+    def on_fit_config_fn(rnd: int) -> dict:
+
+        lr = float(rc.get("lr", 1e-2)) if rnd < 3 else float(rc.get("lr-after", 5e-3))
         return {
-            "epochs": 1,
-            "lr": 1e-2 if rnd < 3 else 5e-3,
-            "batch-size": int(rc.get("batch-size", 128)),
+            "epochs": int(rc.get("local-epochs", 1)),
+            "lr": lr,
+            # FedProx-Parameter (μ=0.0 schaltet Prox aus)
+            "mu": float(rc.get("mu", 0.0)),
+            # Sanfte Regularisierung/Stabilisierung
+            "weight-decay": float(rc.get("weight-decay", 1e-4)),
+            "clip-grad-norm": float(rc.get("clip-grad-norm", 5.0)),
+            # Feste globale Eval-Schwelle (optional, z. B. 0.35 statt 0.5), das bede
+            "eval-threshold": float(rc.get("eval-threshold", 0.42)),
         }
 
-    def evaluate_metrics_aggregation_fn(metrics):
-        total = sum(n for n, _ in metrics)
-        acc = sum(n * m.get("accuracy", 0.0) for n, m in metrics) / max(total, 1)
-        auc = sum(n * m.get("auc", 0.0) for n, m in metrics) / max(total, 1)
-        precision = sum(n * m.get("precision", 0.0) for n, m in metrics) / max(total, 1)
-        recall = sum(n * m.get("recall", 0.0) for n, m in metrics) / max(total, 1)
-        f1 = sum(n * m.get("f1", 0.0) for n, m in metrics) / max(total, 1)
-        specificity = sum(n * m.get("specificity", 0.0) for n, m in metrics) / max(total, 1)
+    # --- Metrik-Aggregation ---
+    # Wir unterstützen zwei Pfade:
+    # 1) klassisch: gew. Mittel fertiger Metrics (AUC etc.)
+    # 2) robust: TP/FP/TN/FN zuerst summieren, daraus globale Präzision/Recall/F1/Spez berechnen
+    def _safe_div(a: float, b: float) -> float:
+        return float(a) / float(b) if b else 0.0
+
+    def _metrics_from_counts(tp: int, fp: int, tn: int, fn: int) -> dict:
+        tpr = _safe_div(tp, tp + fn)                # = Recall / Sensitivität
+        fpr = _safe_div(fp, fp + tn)
+        spec = 1.0 - fpr                            # Spezifität
+        ppv  = _safe_div(tp, tp + fp)               # = Precision / PPV
+        npv  = _safe_div(tn, tn + fn)
+        prec = ppv
+        rec  = tpr
+        f1   = _safe_div(2*prec*rec, prec + rec) if (prec + rec) else 0.0
+        bal_acc = 0.5 * (tpr + spec)
+        youden  = tpr + spec - 1.0
+        prev    = _safe_div(tp + fn, tp + fp + tn + fn)
+        alerts_per_1000 = _safe_div(tp + fp, tp + fp + tn + fn) * 1000.0
+
         return {
-            "accuracy": acc,
-            "auc": auc,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-            "specificity": specificity,
+            "tp": tp, "fp": fp, "tn": tn, "fn": fn,
+            "tpr": tpr, "recall": rec,
+            "fpr": fpr, "spec": spec,
+            "ppv": ppv, "precision": prec, "npv": npv,
+            "f1": f1, "balanced_accuracy": bal_acc, "youden": youden,
+            "prevalence": prev, "alerts_per_1000": alerts_per_1000,
         }
+
+    def evaluate_metrics_aggregation_fn(eval_metrics: list[tuple[int, dict]]) -> dict:
+        """
+        - Jeder Client führt seine evaluate aus und schickt (loss, n, metrics) zurück.
+        - Flower sammelt diese Tupel und ruft diese Funktion auf.
+        eval_metrics: Liste von (num_examples, metrics_dict) vom Server gesammelt.
+        Erwartet in metrics_dict mindestens: {'tp','fp','tn','fn'} und optional 'auc'.
+        """
+        # 1) Zählwerte micro-aggregieren (über alle Clients summieren)
+        TP = FP = TN = FN = 0
+        total_weight_for_auc = 0
+        auc_weighted_sum = 0.0
+
+        for n, md in eval_metrics:
+            tp = int(md.get("tp", 0)); fp = int(md.get("fp", 0))
+            tn = int(md.get("tn", 0)); fn = int(md.get("fn", 0))
+            TP += tp; FP += fp; TN += tn; FN += fn
+
+            # AUC sinnvoll mitteln (gewichtete Mittelung nach n oder nach (tp+fp+tn+fn))
+            auc = md.get("auc", None)
+            if auc is not None:
+                w = int(n) if n else (tp + fp + tn + fn)
+                if w:
+                    auc_weighted_sum += float(auc) * w
+                    total_weight_for_auc += w
+
+        # 2) Screening-Metriken aus Gesamtsummen
+        agg = _metrics_from_counts(TP, FP, TN, FN)
+
+        # 3) AUC anhängen (falls vorhanden)
+        if total_weight_for_auc:
+            agg["auc"] = auc_weighted_sum / total_weight_for_auc
+
+        return agg
+
 
     def fit_metrics_aggregation_fn(metrics):
-        total = sum(n for n, _ in metrics)
-        acc = sum(n * m.get("fit_accuracy", 0.0) for n, m in metrics) / max(total, 1)
-        loss = sum(n * m.get("fit_loss", 0.0) for n, m in metrics) / max(total, 1)
-        auc = sum(n * m.get("fit_auc", 0.0) for n, m in metrics) / max(total, 1)
-        return {
-            "fit_accuracy": acc,
-            "fit_loss": loss,
-            "fit_auc": auc,
-        }
+        n_sum = sum(n for n, _ in metrics) or 1
+        keys = set().union(*(m.keys() for _, m in metrics))
+        return {k: sum(n * m.get(k, 0.0) for n, m in metrics) / n_sum for k in keys}
 
     strategy = FedAvg(
         fraction_fit=float(rc.get("fraction-fit", 0.5)),
         fraction_evaluate=float(rc.get("fraction-evaluate", 1.0)),
         min_fit_clients=int(rc.get("min-fit-clients", 5)),
-        min_evaluate_clients=int(rc.get("min-evaluate-clients", 2)),
+        min_evaluate_clients=int(rc.get("min-evaluate-clients", 10)),
         on_fit_config_fn=on_fit_config_fn,
         evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation_fn,
         fit_metrics_aggregation_fn=fit_metrics_aggregation_fn,
+        # server_momentum=0.9,  # FedAvgM
     )
 
-    cfg = ServerConfig(num_rounds=int(rc.get("num-server-rounds", 5)))
+    cfg = ServerConfig(num_rounds=int(rc.get("num-server-rounds", 10)))
 
 
     return ServerAppComponents(config=cfg, strategy=strategy)

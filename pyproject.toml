@@ -38,10 +38,10 @@ clientapp = "federated_learning.client_app:app"
 # Custom config values accessible via `context.run_config`
 [tool.flwr.app.config]
 # Server
-num-server-rounds = 5
-fraction-fit = 0.5
+num-server-rounds = 20
+fraction-fit = 0.8
 fraction-evaluate = 1.0
-min-fit-clients = 5
+min-fit-clients = 8
 min-evaluate-clients = 10
 local-epochs = 1
 
@@ -53,8 +53,12 @@ split-path = "splits_dirichlet_10.json"
 
 # Client
 batch-size = 128
+mu = 1e-3
 lr = 1e-2
-
+after-lr = 2e-3
+weight-decay = 1e-4
+clip-grad-norm = 5.0
+eval-threshold = 0.42
 
 # Default federation to use when running the app
 [tool.flwr.federations]
