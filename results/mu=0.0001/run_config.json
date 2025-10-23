@@ -1,0 +1,14 @@
+{
+  "eval-threshold-mode": "hist",
+  "return-histogram": true,
+  "target-recall": 0.95,
+  "threshold-grid-size": 101,
+  "privacy.mode": "dp",
+  "privacy.k_min": 50,
+  "privacy.dp.mechanism": "laplace",
+  "privacy.dp.epsilon": 1.0,
+  "privacy.dp.delta": 1e-05,
+  "privacy.clip.max_c": 1,
+  "num-server-rounds": 20,
+  "mu": 0.0001
+}

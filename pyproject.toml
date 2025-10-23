@@ -55,10 +55,24 @@ split-path = "splits_dirichlet_10.json"
 batch-size = 128
 mu = 1e-3
 lr = 1e-2
-after-lr = 2e-3
+lr-after = 5e-3
 weight-decay = 1e-4
 clip-grad-norm = 5.0
-eval-threshold = 0.42
+# eval-threshold = 0.35
+
+# Screening/Eval
+eval-threshold-mode = "hist"      # Histogramm-basierte Eval
+target-recall       = 0.95        # Ziel-Recall
+threshold-grid-size = 101         # 0..1 in 100 Bins
+return-histogram    = true
+
+# Privacy (für FEL)
+privacy.mode        = "dp"        # "none" | "k_anonymity" | "dp" | "dp_k"
+privacy.k_min       = 50          # k-Anonymität: min. #Clients je Runde
+privacy.dp.mechanism= "laplace"   # "laplace" (einfach) oder "gaussian"
+privacy.dp.epsilon  = 1.0         # Privacy-Budget
+privacy.dp.delta    = 1e-5        # nur für "gaussian" relevant
+privacy.clip.max_c  = 1           # Beitrag je Client (FEL=1 Record → 1)
 
 # Default federation to use when running the app
 [tool.flwr.federations]
