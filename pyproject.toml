@@ -49,16 +49,17 @@ local-epochs = 1
 dataset-path = "data/diabetes.csv"
 prepared-parquet = "data/diabetes.parquet"
 norm-stats-json = "data/norm_stats.json"
-split-path = "splits_dirichlet_10.json"
+split-path = "splits_iid_10.json"
 
 # Client
 batch-size = 128
 mu = 1e-3
 lr = 1e-2
-after-lr = 2e-3
+lr-after = 5e-3
 weight-decay = 1e-4
 clip-grad-norm = 5.0
 eval-threshold = 0.42
+run-tag = 1
 
 # Default federation to use when running the app
 [tool.flwr.federations]

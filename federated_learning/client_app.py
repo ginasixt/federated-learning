@@ -177,7 +177,7 @@ class FlowerClient(NumPyClient):
 
         lr = float(config.get("lr", self.default_lr))
         epochs = int(config.get("epochs", self.local_epochs))
-        mu = float(config.get("mu", 0.0))
+        mu = float(config.get("mu", 1e-3))
         wd = float(config.get("weight-decay", 1e-4))
         clip = float(config.get("clip-grad-norm", 5.0))
 

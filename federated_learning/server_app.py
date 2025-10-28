@@ -4,6 +4,9 @@ from __future__ import annotations
 from flwr.server import ServerApp, ServerConfig
 from flwr.server.strategy import FedAvg
 from flwr.common import Context
+from pathlib import Path
+from federated_learning.screening_policy import ScreeningPolicy
+import json
 
 try:
     # je nach Version liegt es hier:
@@ -23,6 +26,10 @@ def server_fn(context: Context) -> ServerAppComponents:
     """Build strategy + config. FedAvg + stabilere Settings + robuste Metrik-Aggregation."""
     rc = dict(context.run_config)
 
+    # Screening-Policy Klasse erstellen für die Runden-Auswahl
+    screening = ScreeningPolicy()
+    round_counter = {"r": 0}
+
     # --- Pro-Runden-Konfiguration für Clients ---
     def on_fit_config_fn(rnd: int) -> dict:
 
@@ -31,7 +38,7 @@ def server_fn(context: Context) -> ServerAppComponents:
             "epochs": int(rc.get("local-epochs", 1)),
             "lr": lr,
             # FedProx-Parameter (μ=0.0 schaltet Prox aus)
-            "mu": float(rc.get("mu", 0.0)),
+            "mu": float(rc.get("mu", 1e-3)),
             # Sanfte Regularisierung/Stabilisierung
             "weight-decay": float(rc.get("weight-decay", 1e-4)),
             "clip-grad-norm": float(rc.get("clip-grad-norm", 5.0)),
@@ -100,6 +107,18 @@ def server_fn(context: Context) -> ServerAppComponents:
         # 3) AUC anhängen (falls vorhanden)
         if total_weight_for_auc:
             agg["auc"] = auc_weighted_sum / total_weight_for_auc
+
+        # Runde hochzählen (Flower ruft diese Funktion einmal pro Runde auf)
+        round_counter["r"] += 1
+        rnd = round_counter["r"]
+        threshold = str(rc.get("eval-threshold", "none"))
+        run_tag = str(rc.get("run-tag", "none"))
+
+        # Screening-Policy aktualisieren & speichern
+        screening.add_round(rnd, agg)
+        path = Path(f"result/idd/thr_{threshold}/run_{run_tag}.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        screening.save_best(str(path))
 
         return agg
 
