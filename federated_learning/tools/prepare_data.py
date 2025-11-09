@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+# Bereitet den Diabetes-Datensatz vor, 20% Testanteil, speichert Parquet und Normalisierungsstatistiken
 def prepare(csv_path, out_parquet, out_stats, test_size=0.2, seed=123):
     # Load Daraset from Kaggle
     path = kagglehub.dataset_download("alexteboul/diabetes-health-indicators-dataset")
@@ -15,7 +16,7 @@ def prepare(csv_path, out_parquet, out_stats, test_size=0.2, seed=123):
     
     # devide feature set and target (diabetes or not)
     target_col = "Diabetes_binary"  # ggf. anpassen
-    y = df[target_col].astype(int).values # target values (0/1)
+    y = df[target_col].astype(int).values # target values are 0 for no diabetes, 1 for prediabetes and 2 for diabetes
     X = df.drop(columns=[target_col]).astype(float) # feature set (alles außer target)
 
     # Splitting into Train und Test (stratified)

@@ -10,6 +10,14 @@ from torch.utils.data import TensorDataset, DataLoader
 
 # Lädt die vorbereiteten Daten und Normalisierungs-Statistiken
 def load_prepared(parquet_path: str, stats_path: str):
+    """
+    Load prepared parquet + stats and map labels for binary classification.
+        label_mode:
+        - "prepos": 0→neg, 1+2→pos (Screening: pre-diabetic + diabetic = risk)
+        - "diabetes_only": 0+1→neg, 2→pos (Diagnosis: only diabetic = pos)
+        - "multiclass": keep original {0,1,2} (requires out_dim=3)
+    """
+    
     df = pd.read_parquet(parquet_path)
     meta = json.loads(Path(stats_path).read_text())
 
@@ -30,7 +38,14 @@ def load_prepared(parquet_path: str, stats_path: str):
     # Also berechen wir mean und std auf Trainingsdaten (sonst Data Leakage) und normalisiwren Train und Test mit diesen Werten.
     X_all = (X_all - pd.Series(mean)) / pd.Series(std)
     X_all = X_all.values.astype("float32")
-    y_all = y_all.astype("int64")
+
+    # For binary classification, map labels:
+    #   Screening: 0=gesund (neg), 1=prä+2=diabetes (pos)
+    y_all = (y_all >= 1).astype("int64")
+
+    # We could also do diabetes-only classification here
+    #   Diagnosis: 0=gesund+1=prä (neg), 2=diabetes (pos)
+    # or a multiclass classification (0,1,2), but we will use our AI for screening.
 
     return X_all, y_all, tr_idx, te_idx
 
