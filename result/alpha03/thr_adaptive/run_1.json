@@ -1,0 +1,29 @@
+{
+  "round": 16,
+  "metrics": {
+    "tp": 54230.0,
+    "fp": 121540.0,
+    "tn": 315140.0,
+    "fn": 16460.0,
+    "tpr": 0.7671523553543641,
+    "recall": 0.7671523553543641,
+    "fpr": 0.27832737931666207,
+    "spec": 0.7216726206833379,
+    "ppv": 0.3085281902486204,
+    "precision": 0.3085281902486204,
+    "npv": 0.9503618817852835,
+    "f1": 0.44007141118234194,
+    "balanced_accuracy": 0.744412488018851,
+    "youden": 0.4888249760377019,
+    "prevalence": 0.1393263298973136,
+    "alerts_per_1000": 346.4335691901374,
+    "auc": 0.8203535792576695,
+    "threshold_current": 0.44617292284965515,
+    "threshold_aggregation_tier": "no_update",
+    "threshold_quality_weighted": 0.46383306010647785,
+    "threshold_median_trimmed": 0.46802520751953125,
+    "num_primary_clients": 6.0,
+    "num_total_clients": 7.0,
+    "threshold_next": 0.44617292284965515
+  }
+}
