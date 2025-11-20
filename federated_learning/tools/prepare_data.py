@@ -7,44 +7,69 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-# Bereitet den Diabetes-Datensatz vor, 20% Testanteil, speichert Parquet und Normalisierungsstatistiken
-def prepare(csv_path, out_parquet, out_stats, test_size=0.2, seed=123):
-    # Load Daraset from Kaggle
+def prepare(csv_path, out_parquet, out_stats, test_size=0.2, val_size=0.1, seed=123):
+    """
+    Bereitet Daten vor mit Train/Val/Test Split:
+    - Train: 70% (für Client-Training)
+    - Validation: 10% (für Threshold-Tuning, client-lokal)
+    - Test: 20% (für finale Evaluation, global)
+    """
+    # Load Dataset from Kaggle
     path = kagglehub.dataset_download("alexteboul/diabetes-health-indicators-dataset")
     csv_path = os.path.join(path, "diabetes_binary_health_indicators_BRFSS2015.csv")
     df = pd.read_csv(csv_path)
     
-    # devide feature set and target (diabetes or not)
-    target_col = "Diabetes_binary"  # ggf. anpassen
-    y = df[target_col].astype(int).values # target values are 0 for no diabetes, 1 for prediabetes and 2 for diabetes
-    X = df.drop(columns=[target_col]).astype(float) # feature set (alles außer target)
+    # Divide feature set and target
+    target_col = "Diabetes_binary"
+    y = df[target_col].astype(int).values
+    X = df.drop(columns=[target_col]).astype(float)
 
-    # Splitting into Train und Test (stratified)
-    # startified = gleiche Verteilung der Klassen in Train und Test
-    idx = np.arange(len(df)) # wie viele Zeilen hat der Datensatz
-    tr_idx, te_idx = train_test_split(idx, test_size=test_size, random_state=seed, stratify=y)
+    # ✅ FIX: Split in 3 Sets (Train, Val, Test)
+    idx = np.arange(len(df))
+    
+    # 1) Train vs. (Val+Test)
+    tr_idx, temp_idx = train_test_split(
+        idx, 
+        test_size=(test_size + val_size),  # 30% = 20% Test + 10% Val
+        random_state=seed, 
+        stratify=y
+    )
 
-    # Normalisierungs-Statistiken speichern
-    # Mean ist der Mittelwert, also Durchschnittswert eines Features
-    # std die Standardabweichung (wie weit sind die Daten im Durchschnitt vom Mittelwert entfernt)
-    # Berechen diese Werte aber nur auf Trainingsdaten um Data Leakage zu vermeiden
-    mean = X.iloc[tr_idx].mean().to_dict() # Mittelwert - average of values
-    std  = (X.iloc[tr_idx].std().replace(0, 1)).to_dict() # Standartabweichung - Streuung
+    # 2) Val vs. Test
+    y_temp = y[temp_idx]
+    val_idx, te_idx = train_test_split(
+        temp_idx,
+        test_size=test_size / (test_size + val_size),  # 20/(20+10) = 2/3
+        random_state=seed + 1,
+        stratify=y_temp
+    )
 
-    # Jetzt speichern wir die Daten im Parquet Format, 
-    X[target_col] = y # fügt das target wieder in die Feature Matrix ein
-    X["__row_id__"] = idx # idx matcht die Reihenfolge der Daten im Parquet File für die Indices Zuordnung
-    # Parquet ist ein spaltenbasiertes, komprimiertes Format, das effiziente Speicherung und schnellen Zugriff auf große Datenmengen ermöglicht.
+    # Normalisierungs-Statistiken (nur auf Train!)
+    mean = X.iloc[tr_idx].mean().to_dict()
+    std  = (X.iloc[tr_idx].std().replace(0, 1)).to_dict()
+
+    # Speichere Parquet mit Row-IDs
+    X[target_col] = y
+    X["__row_id__"] = idx
     Path(out_parquet).parent.mkdir(parents=True, exist_ok=True) 
     X.to_parquet(out_parquet, index=False)
 
-    # Im Json out_stats speichern wir jetzt
-        # Normalisierungs-Statistiken, 
-        # die Train/Test Indices (idx) passend zu unserem Parquet File,
-        # und die Target-Spalte 
-    stats = {"mean": mean, "std": std, "train_idx": tr_idx.tolist(), "test_idx": te_idx.tolist(), "target": target_col}
+    # Speichere Stats
+    stats = {
+        "mean": mean, 
+        "std": std, 
+        "train_idx": tr_idx.tolist(), 
+        "val_idx": val_idx.tolist(), 
+        "test_idx": te_idx.tolist(), 
+        "target": target_col
+    }
     Path(out_stats).write_text(json.dumps(stats))
-    print("OK:", out_parquet, out_stats)
+    
+    print(" Daten vorbereitet.")
+    print(f"   Train: {len(tr_idx)} samples ({len(tr_idx)/len(df)*100:.1f}%)")
+    print(f"   Val:   {len(val_idx)} samples ({len(val_idx)/len(df)*100:.1f}%)")
+    print(f"   Test:  {len(te_idx)} samples ({len(te_idx)/len(df)*100:.1f}%)")
+    print(f"   Saved: {out_parquet}, {out_stats}")
 
 if __name__ == "__main__":
     import argparse
@@ -52,5 +77,7 @@ if __name__ == "__main__":
     p.add_argument("--csv", required=True)
     p.add_argument("--parquet", required=True)
     p.add_argument("--stats", required=True)
+    p.add_argument("--test_size", type=float, default=0.2)
+    p.add_argument("--val_size", type=float, default=0.1)   
     a = p.parse_args()
-    prepare(a.csv, a.parquet, a.stats)
+    prepare(a.csv, a.parquet, a.stats, a.test_size, a.val_size)

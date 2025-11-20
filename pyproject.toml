@@ -39,27 +39,32 @@ clientapp = "federated_learning.client_app:app"
 [tool.flwr.app.config]
 # Server
 num-server-rounds = 20
-fraction-fit = 0.8
+fraction-fit = 0.8 # 80% der Clients pro Runde
 fraction-evaluate = 1.0
 min-fit-clients = 8
-min-evaluate-clients = 10
+min-evaluate-clients = 9
 local-epochs = 1
 
 # Datenpfade
 dataset-path = "data/diabetes.csv"
 prepared-parquet = "data/diabetes.parquet"
 norm-stats-json = "data/norm_stats.json"
-split-path = "splits_iid_10.json"
+split-path = "splits_dirichlet_10_a03.json"
 
 # Client
 batch-size = 128
-mu = 1e-3
+mu = 1e-4
 lr = 1e-2
 lr-after = 5e-3
-weight-decay = 1e-4
+weight-decay = 1e-5
+pos-weight-boost = 1.5  # Test: 1.5, 2.0, 2.5, 3.0
 clip-grad-norm = 5.0
-eval-threshold = 0.42
+eval-threshold = 0.35
 run-tag = 1
+
+# Loss
+use-focal-loss = false
+focal-gamma = 1.0 
 
 # Default federation to use when running the app
 [tool.flwr.federations]
