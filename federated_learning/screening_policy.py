@@ -22,7 +22,7 @@ class ScreeningPolicy:
         """
         Add round metrics to history.
         """
-        # ✅ Filter: Konvertiere nur numeric values zu float, behalte strings
+        # Filter: Konvertiere nur numeric values zu float, behalte strings
         processed_metrics = {}
         for k, v in metrics.items():
             if k == "all_thresholds":
