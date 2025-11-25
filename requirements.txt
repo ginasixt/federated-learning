@@ -61,7 +61,6 @@ requests==2.32.4
 rich==13.9.4
 rpds-py==0.26.0
 scikit-learn==1.6.1
-scipy==1.13.1
 seaborn==0.13.2
 shellingham==1.5.4
 six==1.17.0
